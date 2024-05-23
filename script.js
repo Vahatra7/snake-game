@@ -7,10 +7,13 @@ window.onload = function () {//excecute this when the window is on load
     //we need this because we will think of the snake as unions of these imaginary bocks
     var block_size = 30;
     var ctx;
-    var delay = 100; //unit is in milisecond
-    // var x_coord = 0;
-    // var y_coord = 0;
+    var delay = 300; //unit is in milisecond
     var snakee;
+    var apple;
+
+    //needed when checking if snake bumps into a wall
+    var canvas_width_blocks = canvas_width / block_size;
+    var canvas_height_blocks = canvas_height / block_size;
 
     init();
 
@@ -30,22 +33,29 @@ window.onload = function () {//excecute this when the window is on load
         //let's just consider this snake as an example to draw for an initial position
         snakee = new Snake([[6, 4], [5, 4], [4, 4]], 'right');
 
+        apple = new Appel([10, 10]);
+
         refresh_canvas();
     }
 
     function refresh_canvas() {
-        // ctx.clearRect(0, 0, canvas_width, canvas_height);//initialize the rect position
-        // x_coord += 2; 
-        // y_coord += 2;
-        // ctx.fillStyle = 'red';
-        // //create a rectangle. args: x, y, w, h (all unit in px). x: x-distance from the left-top corner of the canvas, similarly for the y. w and h are width and height of the rectangle
-        // ctx.fillRect(x_coord, y_coord, 100, 50);
-
-        snakee.draw();
         snakee.move();
-        //to call a certain function each time a certain delay has passed
-        setTimeout(refresh_canvas, delay);
-
+        if (snakee.check_crash()) {
+            //Game over
+        }
+        else {
+            if (snakee.eating_appel(apple)) {
+                snakee.ate_apple = true;
+                do {
+                    apple.set_new_position();
+                } while (apple.is_on_snake(snakee))//we don't want the new apple on the snake's body
+            }
+            ctx.clearRect(0, 0, canvas_width, canvas_height);//initialize the rect position
+            snakee.draw();
+            apple.draw();
+            //to call a certain function each time a certain delay has passed
+            setTimeout(refresh_canvas, delay);
+        }
     }
 
 
@@ -57,15 +67,16 @@ window.onload = function () {//excecute this when the window is on load
     function Snake(body, direction) {
         this.body = body;
         this.direction = direction;//direction where the snake moves
+        this.ate_apple = false;//used when increasing the snake's length
 
         //to draw the snake
         this.draw = function () {
-            ctx.save();//save the previous ctx of the canvas
+            ctx.save();//save the previous property of the canvas (ex:color etc)
             ctx.fillStyle = 'red';
             for (i = 0; i < this.body.length; i++) {
                 draw_block(ctx, this.body[i]);
             }
-            ctx.restore();
+            ctx.restore();//restore the saved property
         };
 
         //to move the snake:add one block where its head will be (depending on the direction), and erase its tail
@@ -93,8 +104,12 @@ window.onload = function () {//excecute this when the window is on load
             //append this new position to body as its first element
             this.body.unshift(head_new_position);
 
-            //delete the tail
-            this.body.pop();
+            //delete the tail only if the snake didn't eat an apple
+            if (!this.ate_apple)
+                this.body.pop();
+            else
+                this.ate_apple = false;
+
         };
 
         this.set_direction = function (new_direction) {
@@ -111,9 +126,34 @@ window.onload = function () {//excecute this when the window is on load
                 default:
                     throw ('Invalid direction');
             }
-            if (possible_directions.indexOf(new_direction) > -1) {//that is new_direction is in the list possible_directions
+            if (possible_directions.includes(new_direction)) {//that is new_direction is in the list possible_directions
                 this.direction = new_direction;
             }
+        };
+
+        this.check_crash = function () {
+            var wall_crash = false;
+            var self_crash = false;
+            var snake_head = this.body[0];
+            var snake_body = this.body.slice(1);
+            var left_right_crashed = snake_head[0] < 0 || snake_head[0] >= canvas_width_blocks;
+            var up_down_crashed = snake_head[1] < 0 || snake_head[1] >= canvas_height_blocks;
+            if (left_right_crashed || up_down_crashed) { wall_crash = true; }
+            for (i = 0; i < snake_body.length; i++) {//.incudes and .indexOf don't work
+                if (snake_body[i][0] === snake_head[0] && snake_body[i][1] === snake_head[1]) {
+                    self_crash = true;
+                    break;
+                }
+            }
+            return wall_crash || self_crash;
+        };
+
+        this.eating_appel = function (appel_to_eat) {
+            var head = this.body[0];
+            if (head[0] === appel_to_eat.position[0] && head[1] === appel_to_eat.position[1])
+                return true;
+            else
+                return false;
         };
 
     }
@@ -122,6 +162,39 @@ window.onload = function () {//excecute this when the window is on load
         var x = position[0] * block_size; //unit in px 
         var y = position[1] * block_size;
         ctx.fillRect(x, y, block_size, block_size);
+    }
+
+    function Appel(position) {//block position where the appel is
+        this.position = position;
+        this.draw = function () {
+            ctx.save();
+            ctx.fillStyle = '#33cc33';
+            ctx.beginPath();
+            var radius = block_size / 2;
+            var x_center = this.position[0] * block_size + radius;
+            var y_center = this.position[1] * block_size + radius;
+            ctx.arc(x_center, y_center, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        };
+
+        this.set_new_position = function () {
+            var new_x = Math.round(Math.random() * (canvas_width_blocks - 1));
+            var new_y = Math.round(Math.random() * (canvas_height_blocks - 1));
+            this.position = [new_x, new_y];
+        };
+
+        //we don't want the new appel to be on the snake's body
+        this.is_on_snake = function (snake_to_check) {
+            var on_snake = false;
+            for (i = 0; i < snake_to_check.body.length; i++) {
+                if (this.position[0] === snake_to_check.body[i][0] && this.position[1] === snake_to_check.body[i][1]) {
+                    on_snake = true;
+                    //break;
+                }
+            }
+            return on_snake;
+        };
     }
 
     document.onkeydown = function handle_keydown(e) {//excecute when the user use keyboard
