@@ -7,13 +7,23 @@ window.onload = function () {//excecute this when the window is on load
     //we need this because we will think of the snake as unions of these imaginary bocks
     var block_size = 30;
     var ctx;
-    var delay = 300; //unit is in milisecond
+    var max_delay = 200; //unit is in milisecond
+    var delay_step = 50;
+    var level;
+    var score_step = 10; //to increase level
+    var saved_score;
+    var min_delay = 50;
+    //level delay: 200, 150, 100, 50
     var snakee;
     var apple;
+    var score;
 
     //needed when checking if snake bumps into a wall
     var canvas_width_blocks = canvas_width / block_size;
     var canvas_height_blocks = canvas_height / block_size;
+
+    //track the setTimeout and clear it before refresh canvas
+    var timeout;
 
     init();
 
@@ -22,7 +32,10 @@ window.onload = function () {//excecute this when the window is on load
         canvas = document.createElement('canvas');
         canvas.width = canvas_width;
         canvas.height = canvas_height;
-        canvas.style.border = '2px solid';
+        canvas.style.border = '20px solid gray';
+        canvas.style.margin = '50px auto';
+        canvas.style.display = 'block'
+        canvas.style.backgroundColor = '#ddd';
 
         //to attach the above properties to the html page
         document.body.appendChild(canvas);
@@ -35,6 +48,10 @@ window.onload = function () {//excecute this when the window is on load
 
         apple = new Appel([10, 10]);
 
+        delay = max_delay;
+        level = 1;
+        score = 0;
+        saved_score = 0;
         refresh_canvas();
     }
 
@@ -42,19 +59,29 @@ window.onload = function () {//excecute this when the window is on load
         snakee.move();
         if (snakee.check_crash()) {
             //Game over
+            game_over();
         }
         else {
             if (snakee.eating_appel(apple)) {
+                score++;
                 snakee.ate_apple = true;
                 do {
                     apple.set_new_position();
                 } while (apple.is_on_snake(snakee))//we don't want the new apple on the snake's body
             }
             ctx.clearRect(0, 0, canvas_width, canvas_height);//initialize the rect position
+            //draw the score first so that the snake and appel won't be hidden by the score
+            draw_score();
             snakee.draw();
             apple.draw();
+
             //to call a certain function each time a certain delay has passed
-            setTimeout(refresh_canvas, delay);
+            if (score - saved_score == score_step && delay > min_delay) {
+                delay -= delay_step;
+                saved_score = score
+                level++;
+            }
+            timeout = setTimeout(refresh_canvas, delay);
         }
     }
 
@@ -158,6 +185,46 @@ window.onload = function () {//excecute this when the window is on load
 
     }
 
+    function restart() {
+        snakee = new Snake([[6, 4], [5, 4], [4, 4]], 'right');
+        apple = new Appel([10, 10]);
+        delay = max_delay;
+        level = 1;
+        score = 0;
+        saved_score = 0;
+        clearTimeout(timeout);
+        refresh_canvas();
+    }
+
+    function draw_score() {
+        ctx.save();
+        ctx.font = "bold 200px Verdana";
+        ctx.fillStyle = 'lightgray';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center'
+        ctx.fillText(score.toString(), canvas_width / 2, canvas_height / 2);
+
+        ctx.font = "bold 100px Verdana";
+        ctx.fillText("LEVEL " + level.toString(), canvas_width / 2, 450);
+        ctx.restore();
+    }
+
+    function game_over() {
+        ctx.save();
+        ctx.font = "bold 70px Verdana";
+        //border of the text
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 5;
+
+        ctx.strokeText("GAME OVER", 200, 150);
+        ctx.fillText("GAME OVER", 200, 150);
+
+        ctx.font = "bold 30px Verdana";
+        ctx.strokeText("Press space to replay", 250, 180);
+        ctx.fillText("Press space to replay", 250, 180);
+        ctx.restore();
+    }
+
     function draw_block(ctx, position) {
         var x = position[0] * block_size; //unit in px 
         var y = position[1] * block_size;
@@ -213,6 +280,10 @@ window.onload = function () {//excecute this when the window is on load
             case 40://code for down arrow
                 new_direction = 'down';
                 break;
+            case 32://space key
+                if (snakee.check_crash())//don't restart if space was pressed before game over
+                    restart();
+                return;
             default:
                 return;
         }
